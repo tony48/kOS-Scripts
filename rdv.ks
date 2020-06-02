@@ -8,7 +8,10 @@
 // THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
 // TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-runpath("lib_nav.ks").
+
+// Original C# functions by djungelorm
+
+//runpath("lib_nav.ks").
 clearscreen.
 sas off.
 // on commence par faire la correction d'inclinaison
@@ -22,7 +25,7 @@ if relInc > 0.09 { // si l'inclinaison est importante on corrige
     if dnUT < anUT { // on prend le premier node
         set incCorrection to node(dnUT, 0, dvI, 0).
     } else {
-        set incCorrection to node(anUT, 0, -dvI, 0).
+        set incCorrection to node(anUT, 0, -dvI, 0). // si on est a l'AN il faut burn antinormal, donc -dvI
     }
     add incCorrection.
     executeNode(). // et on fait la correction
@@ -81,26 +84,29 @@ executeNode(). // on execute le node
 set cas to ListClosestApproaches(target, 1). // le nombre d'approches (normalement une)
 set altca to (positionAt(ship, cas[0][0]) - ship:body:position):mag. // notre altitude a l'approche
 // vis viva pour rel speed
-set va to sqrt(ship:body:mu*(2/altca-1/ship:obt:semimajoraxis)).
-set vc to sqrt(ship:body:mu*(2/altca-1/altca)).
+//set va to sqrt(ship:body:mu*(2/altca-1/ship:obt:semimajoraxis)).
+//set vc to sqrt(ship:body:mu*(2/altca-1/altca)).
+//set dvca to vc - va.
+set va to velocityAt(ship, cas[0][0]):orbit:mag.
+set vc to velocityAt(target, cas[0][0]):orbit:mag.
 set dvca to vc - va.
-set canode to node(eta:apoapsis + time:seconds, 0, 0, dvca).
+set canode to node(cas[0][0] - 3, 0, 0, dvca).
 add canode. // node pour annuler la vitesse relative
 executeNode2(). // on l'execute mais pas avec la meme methode
 
 lock relativeVelocityVec to target:velocity:orbit - ship:velocity:orbit. // le vecteur de velocite relative
 lock relativeSpeed to relativeVelocityVec:mag. // la vitesse relative
-lock steering to relativeVelocityVec. // on pointe retrograde par rapport au target
-wait until vang(relativeVelocityVec, ship:facing:vector) < 0.5.
-lock throttle to 0.5. // on annule la vitesse
-wait until relativeSpeed < 1.
-lock throttle to 0.1.
-wait until relativeSpeed < 0.1.
-lock throttle to 0.
+//lock steering to relativeVelocityVec. // on pointe retrograde par rapport au target
+//wait until vang(relativeVelocityVec, ship:facing:vector) < 0.5.
+//lock throttle to 0.5. // on annule la vitesse
+//wait until relativeSpeed < 1.
+//lock throttle to 0.1.
+//wait until relativeSpeed < 0.1.
+//lock throttle to 0.
 lock steering to target:direction.
 wait until vang(target:direction:vector, ship:facing:vector) < 0.5.
 lock throttle to 0.2.
-wait until relativeSpeed >= 2. // on se rapproche de la cible
+wait until relativeSpeed >= 5. // on se rapproche de la cible
 lock throttle to 0.
 lock steering to relativeVelocityVec.
 wait until vang(relativeVelocityVec, ship:facing:vector) < 0.5.
@@ -120,6 +126,37 @@ function apCalc {
 }
 
 
+function executeNode2 {
+    local nd to nextNode.
+    local eIsp to 0.
+    local my_engines to list().
+    list engines in my_engines.
+    for eng in my_engines {
+        set eIsp to eIsp + eng:maxThrust / ship:maxthrust * eng:isp.
+    }
+    local ve to eIsp * 9.82.
+    local m0 to ship:mass.
+    local m1 to m0 * constant:e ^ (-1 *nd:burnvector:mag / ve).
+    local ai to ship:availablethrust / ship:mass.
+    local af to ship:availablethrust / m1.
+    local t to nd:burnvector:mag / ((ai + af) / 2).
+    local start_t to time:seconds + nd:eta - t.
+
+    lock relativeVelocityVec to target:velocity:orbit - ship:velocity:orbit.
+    lock steering to relativeVelocityVec.
+    wait until vang(ship:facing:vector, relativeVelocityVec) < 0.5.
+    kuniverse:timewarp:warpto(start_t - 10).
+
+    wait until time:seconds >= start_t.
+    lock throttle to 1.
+    wait until relativeVelocityVec:mag <= 15.
+    lock throttle to 0.3.
+    wait until relativeVelocityVec:mag <= 0.2.
+    lock throttle to 0.
+    lock steering to prograde.
+    remove nd.
+}
+
 function executeNode {
     local nd to nextNode.
     local eIsp to 0.
@@ -135,36 +172,6 @@ function executeNode {
     local af to ship:availablethrust / m1.
     local t to nd:burnvector:mag / ((ai + af) / 2).
     local start_t to time:seconds + nd:eta - t / 2.
-
-    lock steering to nd:burnvector.
-    wait until vang(ship:facing:vector, nd:burnvector) < 0.5.
-    kuniverse:timewarp:warpto(start_t - 10).
-
-    wait until time:seconds >= start_t.
-    lock throttle to 1.
-    wait until nd:burnvector:mag <= 15.
-    lock throttle to 0.3.
-    wait until nd:burnvector:mag <= 0.2.
-    lock throttle to 0.
-    lock steering to prograde.
-    remove nd.
-}
-
-function executeNode2 {
-    local nd to nextNode.
-    local eIsp to 0.
-    local my_engines to list().
-    list engines in my_engines.
-    for eng in my_engines {
-        set eIsp to eIsp + eng:maxThrust / ship:maxthrust * eng:isp.
-    }
-    local ve to eIsp * 9.82.
-    local m0 to ship:mass.
-    local m1 to m0 * constant:e ^ (-1 *nd:burnvector:mag / ve).
-    local ai to ship:availablethrust / ship:mass.
-    local af to ship:availablethrust / m1.
-    local t to nd:burnvector:mag / ((ai + af) / 2).
-    local start_t to time:seconds + nd:eta - t / 1.2.
 
     lock steering to nd:burnvector.
     wait until vang(ship:facing:vector, nd:burnvector) < 0.5.

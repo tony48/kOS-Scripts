@@ -89,17 +89,77 @@ if defined target and target:targetable
 	declare trgt_z is 1.
 
 	set stop to false.
-	lock v_ShipToTarget to tpos - spos.
-	lock trgt_x to getSignedMag(vtx * vproj(v_ShipToTarget, vtx), vtx).
+	lock v_ShipToTarget1 to tpos - spos.
+	lock dist_x to getSignedMag(vtx * vproj(v_ShipToTarget1, vtx), vtx).
+	lock dist_y to getSignedMag(vty * vproj(v_ShipToTarget1, vty), vty).
+	lock dist_z to getSignedMag(vtz * vproj(v_ShipToTarget1, vtz), vtz).
 	
-	if trgt_x < 10 {
+	if dist_x < 10 {
+		set bnds to target:ship:bounds.
+		lock corner to bnds:furthestcorner(V(0, vdot(v_ShipToTarget1, ship:facing:topvector), vdot(v_ShipToTarget1, ship:facing:starvector))).
+		lock cornerToTarget to corner - target:ship:position.
+		lock cornerY to -vdot(corner, ship:facing:topvector).
+		lock cornerZ to -vdot(corner, ship:facing:starvector).
+		if abs(vdot(cornerToTarget, ship:facing:topvector)) > abs(vdot(v_ShipToTarget1, ship:facing:topvector)) and abs(vdot(cornerToTarget, ship:facing:starvector)) > abs(vdot(v_ShipToTarget1, ship:facing:starvector)) {
+			if abs(cornerY) > abs(cornerZ) {
+				if cornerY < 0 {
+					print "top 1".
+					set ship:control:top to 1.
+					wait until targetVel:mag > 1.
+					set ship:control:top to 0.
+					wait until cornerY - 5 > 0.
+					set ship:control:top to -1.
+					wait until ( targetVel:mag <= 0.1 ). 
+					set ship:control:top to 0.
+				} else {
+					print "top -1".
+					set ship:control:top to -1.
+					wait until targetVel:mag > 1.
+					set ship:control:top to 0.
+					wait until cornerY + 5 < 0.
+					set ship:control:top to 1.
+					wait until ( targetVel:mag <= 0.1 ). 
+					set ship:control:top to 0.
+				}
+			} else {
+				if cornerZ < 0 {
+					print "star 1".
+					set ship:control:starboard to 1.
+					wait until targetVel:mag > 1.
+					set ship:control:starboard to 0.
+					until cornerZ - 5 > 0
+					{
+						print vdot(corner, ship:facing:starvector).
+					}
+					set ship:control:starboard to -1.
+					wait until ( targetVel:mag <= 0.1 ). 
+					set ship:control:starboard to 0.
+				} else {
+					print "star -1".
+					set ship:control:starboard to -1.
+					wait until targetVel:mag > 1.
+					set ship:control:starboard to 0.
+					until cornerZ + 5 < 0
+					{
+						print vdot(corner, -ship:facing:starvector).
+					}
+					set ship:control:starboard to 1.
+					wait until ( targetVel:mag <= 0.1 ). 
+					set ship:control:starboard to 0.
+				}
+			}
+		}
 		set ship:control:fore to -1.
 		wait until ( targetVel:mag >= 1 ).
 		set ship:control:fore to 0.
-		wait until trgt_x > 10.
+		wait until dist_x > 10.
+		lock steering to targetVel.
+		wait until vang(ship:facing:vector, targetVel) < 0.5.
 		set ship:control:fore to 1.
 		wait until ( targetVel:mag <= 0.1 ). 
 		set ship:control:fore to 0.
+		lock steering to lookdirup(-trgt:portfacing:forevector, trgt:portfacing:upvector).
+	wait until vang(ship:facing:forevector, -trgt:portfacing:forevector) < 1 and vang(ship:facing:upvector, trgt:portfacing:upvector) < 5.
 	}
 	
 
