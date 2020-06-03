@@ -15,11 +15,11 @@
 clearscreen.
 sas off.
 // on commence par faire la correction d'inclinaison
-set dn to addons:utils:TrueAnomalyAtDN(ship, target). // on trouve le dn
-set an to addons:utils:TrueAnomalyAtAN(ship, target). // on trouve l'an
-set dnUT to addons:utils:UTAtTrueAnomaly(ship, dn). // le temps du dn
-set anUT to addons:utils:UTAtTrueAnomaly(ship, an). // le temps de l'an
-set relInc to addons:utils:RelativeInclination(ship, target). // l'inclinaison relative entre nous et la target
+set dn to addons:obt:TrueAnomalyAtDN(ship, target). // on trouve le dn
+set an to addons:obt:TrueAnomalyAtAN(ship, target). // on trouve l'an
+set dnUT to addons:obt:UTAtTrueAnomaly(ship, dn). // le temps du dn
+set anUT to addons:obt:UTAtTrueAnomaly(ship, an). // le temps de l'an
+set relInc to addons:obt:RelativeInclination(ship, target). // l'inclinaison relative entre nous et la target
 if relInc > 0.09 { // si l'inclinaison est importante on corrige
     set dvI to 2 * velocityAt(ship, dnUT):orbit:mag * sin(relInc/2). // le dv de la maneuvre
     if dnUT < anUT { // on prend le premier node
@@ -116,8 +116,33 @@ wait until relativeSpeed < 0.1.
 lock throttle to 0.
 lock steering to "kill".
 set tn to target:name.
-print "Please select a docking port".
-wait until target:name <> tn. // IMPORTANT le script attend qu'on selectionne un docking port
+print "Use the arrows to choose between the docking ports".
+set it to 1.
+set tgtdp to list().
+for dp in target:dockingports {
+    if not dp:haspartner {
+        print it + " - " + dp:tag.
+        tgtdp:add(dp).
+        set it to it + 1.
+    }
+}
+addons:input:engage().
+set selection to 0.
+until target:name <> tn {
+    print "Currently selected :" + tgtdp[selection]:tag at (0, terminal:height - 1).
+    if addons:input:getKey("up") {
+        if selection - 1 >= 0 {
+            set selection to selection - 1.
+        }
+    } else if addons:input:getkey("down") {
+        if selection + 1 < tgtdp:length {
+            set selection to selection + 1.
+        }
+    } else if addons:input:getkey("return") {
+        set target to tgtdp[selection].
+    }
+} // IMPORTANT le script attend qu'on selectionne un docking port
+addons:input:disengage().
 runpath("dock.ks"). // et on se dock, fin du script
 
 
@@ -143,10 +168,10 @@ function executeNode2 {
     local start_t to time:seconds + nd:eta - t.
 
     lock relativeVelocityVec to target:velocity:orbit - ship:velocity:orbit.
-    lock steering to relativeVelocityVec.
-    wait until vang(ship:facing:vector, relativeVelocityVec) < 0.5.
+    lock steering to nd:burnvector.
+    wait until vang(ship:facing:vector, nd:burnvector) < 0.5.
     kuniverse:timewarp:warpto(start_t - 10).
-
+    lock steering to relativeVelocityVec.
     wait until time:seconds >= start_t.
     lock throttle to 1.
     wait until relativeVelocityVec:mag <= 15.

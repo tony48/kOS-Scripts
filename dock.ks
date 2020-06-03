@@ -41,6 +41,10 @@ function getSignedMag
 
 clearvecdraws().
 clearscreen.
+list engines in my_engines.
+for eng in my_engines {
+    eng:shutdown(). // shutdown engines to make sure we don't do an oopsie
+}
 
 //PID loop controlling the translation of the vessel
 //Tweaking the PID : 
